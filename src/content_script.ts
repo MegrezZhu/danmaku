@@ -1,11 +1,15 @@
 import axios from 'axios';
 import { promisify } from 'bluebird';
 import * as $ from 'jquery';
-import 'source-map-support/register';
+// import 'source-map-support/register'; FIXME:
 import { convertableToString, parseString } from 'xml2js';
+
+console.log($('#bofqi').html());
 
 async function initialize (): Promise<void> {
     console.log('danmaku started or url changed');
+    // console.log($('#bofqi script').html());
+
     const cid = getCid();
 
     const [vLength, danmaku] = await Promise.all([
@@ -13,7 +17,7 @@ async function initialize (): Promise<void> {
         getDanmaku(cid)
     ]);
 
-    console.log(danmaku);
+    console.log(`${danmaku.length} danmaku(s) fetched.`);
     console.log(`video length: ${vLength} second.`);
 }
 
@@ -94,4 +98,6 @@ function parseRawDanmaku (raw: IRawDanmaku): IDanmaku {
     return res;
 }
 
-$(initialize); // bind triggering
+// $(initialize); // bind triggering
+
+initialize();

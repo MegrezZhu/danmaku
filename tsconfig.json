@@ -11,5 +11,9 @@
         "rootDir": "src",
         "outDir": "dist/js",
         "noEmitOnError": false,
+        "lib": [
+            "es2017",
+            "dom"
+        ]
     }
 }
