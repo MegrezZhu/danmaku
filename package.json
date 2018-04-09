@@ -1,0 +1,31 @@
+{
+  "name": "danmaku",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "build": "webpack",
+    "dev": "webpack -w"
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "@types/bluebird": "^3.5.20",
+    "@types/chrome": "0.0.58",
+    "@types/jquery": "^3.3.0",
+    "@types/xml2js": "^0.4.2",
+    "ts-loader": "^3.3.1",
+    "tslint": "^5.9.1",
+    "typescript": "^2.6.2",
+    "webpack": "^3.10.0"
+  },
+  "dependencies": {
+    "axios": "^0.18.0",
+    "bluebird": "^3.5.1",
+    "jquery": "^3.3.1",
+    "moment": "^2.20.1",
+    "source-map-support": "^0.5.2",
+    "xml2js": "^0.4.19"
+  }
+}
