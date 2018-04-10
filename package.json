@@ -23,8 +23,10 @@
   "dependencies": {
     "axios": "^0.18.0",
     "bluebird": "^3.5.1",
+    "chart.js": "^2.7.2",
     "jquery": "^3.3.1",
     "moment": "^2.20.1",
+    "rxjs": "^6.0.0-beta.4",
     "source-map-support": "^0.5.2",
     "xml2js": "^0.4.19"
   }

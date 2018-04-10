@@ -1,24 +1,107 @@
+import 'arrive';
 import axios from 'axios';
 import { promisify } from 'bluebird';
 import * as $ from 'jquery';
+import { combineLatest, from, Observable, Observer } from 'rxjs';
+import { distinctUntilChanged, exhaustMap, filter, map, tap } from 'rxjs/operators';
 // import 'source-map-support/register'; FIXME:
 import { convertableToString, parseString } from 'xml2js';
 
-console.log($('#bofqi').html());
+function observeElement (faSelector: string, selector: string): Observable<HTMLElement> {
+    return Observable.create((observer: Observer<HTMLElement>) => {
+        const parent = $(faSelector);
+        const ele = parent.find(selector);
+        if (ele.length !== 0) {
+            observer.next(ele[0]);
+            return observer.complete();
+        }
+        let toDisconnect: MutationObserver|null = null;
+        const obs = toDisconnect = new MutationObserver((mutations: MutationRecord[]) => {
+            const ele = parent.find(selector);
+            if (ele.length !== 0) {
+                observer.next(ele[0]);
+                observer.complete();
+                return toDisconnect!.disconnect();
+            }
+        });
+        obs.observe(parent[0], {
+            subtree: true,
+            childList: true
+        });
+
+    });
+}
+
+function observeContent (node: HTMLElement): Observable<string> {
+    return Observable.create((observer: Observer<string>) => {
+        observer.next($(node).text());
+        const mutationObs = new MutationObserver((mutations: any[]) => {
+            for (const rec of mutations) {
+                if (rec.type === 'childList') {
+                    observer.next($(node).text());
+                }
+            }
+        });
+        mutationObs.observe(
+            node,
+            {
+                characterData: false,
+                attributes: false,
+                childList: true,
+                subtree: false
+            }
+        );
+    });
+}
 
 async function initialize (): Promise<void> {
-    console.log('danmaku started or url changed');
-    // console.log($('#bofqi script').html());
+    console.log('danmaku started.');
 
-    const cid = getCid();
+    // TODO: detect sub-video changes
+    const obContext = observeContent($('#viewbox_report h1')[0])
+        .pipe(
+            distinctUntilChanged(),
+            tap(title => console.log(`titled: ${title}`))
+        )
+        .pipe(exhaustMap(createContext));
+    obContext.subscribe(render);
+}
 
-    const [vLength, danmaku] = await Promise.all([
-        getLength(),
-        getDanmaku(cid)
-    ]);
+function createContext (): Observable<IContext> {
+    const obLength = observeElement('body', '.bilibili-player-video-time-total')
+        .pipe(
+            exhaustMap(observeContent),
+            map(str => str.split(':').reduce((acc, x) => acc + 60 * Number(x), 0)), // parse video length
+            filter(vLength => vLength !== 0),
+            distinctUntilChanged()
+        );
 
-    console.log(`${danmaku.length} danmaku(s) fetched.`);
-    console.log(`video length: ${vLength} second.`);
+    const obCid = observeElement('body', '#link2')
+        .pipe(
+            map(link2 => $(link2).attr('value')!.match(/cid=(\d+)/)![1]),
+            exhaustMap(cid => from(getDanmaku(cid)))
+        );
+
+    return combineLatest(obLength, obCid)
+        .pipe(
+            tap(([vLen, danmaku]) => {
+                console.log(`video length: ${vLen} second.`);
+                console.log(`${danmaku.length} danmaku fetched.`);
+            }),
+            map(([vLen, danmaku]) => ({
+                danmaku,
+                length: vLen
+            }))
+        );
+}
+
+function render (context: IContext) {
+
+}
+
+interface IContext {
+    danmaku: IDanmaku[];
+    length: number;
 }
 
 interface IDanmaku {
@@ -32,48 +115,6 @@ interface IRawDanmaku {
     $: {
         p: string;
     };
-}
-
-function getCid (): string {
-    return $('#link2').attr('value')!.match(/cid=(\d+)/)![1];
-}
-
-function parseVideoLength (str: string): number {
-    return str.split(':').reduce((acc, x) => acc + 60 * Number(x), 0);
-}
-
-/**
- * get video length in seconds
- */
-function getLength (): Promise<number> {
-    return new Promise<number>(resolve => {
-        const target = $('.bilibili-player-video-time-total')[0];
-        const len = parseVideoLength($(target).text());
-        if (len !== 0) {
-            return resolve(len);
-        }
-        const observer = new MutationObserver((...mutations: any[]) => {
-            for (const mute of mutations) {
-                for (const rec of mute) {
-                    if (rec.type === 'childList') {
-                        const len = parseVideoLength($(target).text());
-                        if (len !== 0) {
-                            return resolve(len);
-                        }
-                    }
-                }
-            }
-        });
-        observer.observe(
-            target,
-            {
-                characterData: false,
-                attributes: false,
-                childList: true,
-                subtree: false
-            }
-        );
-    });
 }
 
 const parseXML = promisify(parseString as ((xml: convertableToString, cb: (err: any, result?: any) => void) => void));
