@@ -3,7 +3,7 @@ import axios from 'axios';
 import { promisify } from 'bluebird';
 import * as $ from 'jquery';
 import { combineLatest, from, Observable, Observer } from 'rxjs';
-import { distinctUntilChanged, exhaustMap, filter, map, tap } from 'rxjs/operators';
+import { concatMap, distinctUntilChanged, filter, map, mapTo, take, tap } from 'rxjs/operators';
 // import 'source-map-support/register'; FIXME:
 import { convertableToString, parseString } from 'xml2js';
 
@@ -35,7 +35,7 @@ function observeElement (faSelector: string, selector: string): Observable<HTMLE
 function observeContent (node: HTMLElement): Observable<string> {
     return Observable.create((observer: Observer<string>) => {
         observer.next($(node).text());
-        const mutationObs = new MutationObserver((mutations: any[]) => {
+        const mutationObs = new MutationObserver((mutations: MutationRecord[]) => {
             for (const rec of mutations) {
                 if (rec.type === 'childList') {
                     observer.next($(node).text());
@@ -54,32 +54,51 @@ function observeContent (node: HTMLElement): Observable<string> {
     });
 }
 
+function observeAny (node: HTMLElement): Observable<null> {
+    return Observable.create((observer: Observer<null>) => {
+        observer.next(null);
+        const mutationObs = new MutationObserver((mutations: MutationRecord[]) => {
+            observer.next(null);
+        });
+        mutationObs.observe(node, { childList: true });
+    });
+}
+
 async function initialize (): Promise<void> {
     console.log('danmaku started.');
 
-    // TODO: detect sub-video changes
-    const obContext = observeContent($('#viewbox_report h1')[0])
+    const obContext = observeElement('body', '#bofqi')
+        .pipe(concatMap(observeAny))
         .pipe(
+            map(() => location.href), // detect url changes
             distinctUntilChanged(),
-            tap(title => console.log(`titled: ${title}`))
+            tap(url => console.log(`url change detected: ${url}`)),
+            map(url => {
+                const match = url.match(/\Wp=(\d+)/); // parse ?p=x query in url
+                return match ? Number(match[1]) : 1;
+            }),
+            tap(page => console.log(`page ${page}`))
         )
-        .pipe(exhaustMap(createContext));
+        .pipe(concatMap(createContext));
     obContext.subscribe(render);
 }
 
-function createContext (): Observable<IContext> {
+function createContext (page: number): Observable<IContext> {
+    console.log('creating context...');
+
     const obLength = observeElement('body', '.bilibili-player-video-time-total')
         .pipe(
-            exhaustMap(observeContent),
+            concatMap(observeContent),
             map(str => str.split(':').reduce((acc, x) => acc + 60 * Number(x), 0)), // parse video length
             filter(vLength => vLength !== 0),
-            distinctUntilChanged()
+            take(1)
         );
 
     const obCid = observeElement('body', '#link2')
         .pipe(
             map(link2 => $(link2).attr('value')!.match(/cid=(\d+)/)![1]),
-            exhaustMap(cid => from(getDanmaku(cid)))
+            map(cid => Number(cid) + page - 1),
+            concatMap(cid => from(getDanmaku(cid)))
         );
 
     return combineLatest(obLength, obCid)
@@ -91,12 +110,13 @@ function createContext (): Observable<IContext> {
             map(([vLen, danmaku]) => ({
                 danmaku,
                 length: vLen
-            }))
+            })),
+            take(1)
         );
 }
 
 function render (context: IContext) {
-
+    console.log('render called.');
 }
 
 interface IContext {
@@ -119,7 +139,7 @@ interface IRawDanmaku {
 
 const parseXML = promisify(parseString as ((xml: convertableToString, cb: (err: any, result?: any) => void) => void));
 
-async function getDanmaku (cid: string): Promise<IDanmaku[]> {
+async function getDanmaku (cid: number): Promise<IDanmaku[]> {
     const { data } = await axios.get(`https://comment.bilibili.com/${cid}.xml`);
     const { i: { d } }: { i: {d: IRawDanmaku[]}} = await parseXML(data);
     return d.map(parseRawDanmaku);
