@@ -4,7 +4,7 @@ import echarts = require('echarts');
 import * as $ from 'jquery';
 import ResizeObserver from 'resize-observer-polyfill';
 import { combineLatest, from, Observable, Observer } from 'rxjs';
-import { concatMap, distinctUntilChanged, filter, map, take, tap } from 'rxjs/operators';
+import { concatMap, distinctUntilChanged, filter, map, take } from 'rxjs/operators';
 import { convertableToString, parseString } from 'xml2js';
 
 function observeElement (faSelector: string, selector: string): Observable<HTMLElement> {

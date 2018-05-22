@@ -2,6 +2,8 @@ const webpack = require("webpack");
 const path = require('path');
 const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
+const isProd = process.env.NODE_ENV === 'production';
+
 module.exports = {
     entry: {
         // popup: path.join(__dirname, 'src/popup.ts'),
@@ -36,7 +38,7 @@ module.exports = {
         new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/),
 
         // minify
-        // new webpack.optimize.UglifyJsPlugin(),
+        ...(isProd ? [new webpack.optimize.UglifyJsPlugin()] : [])
 
         // new BundleAnalyzerPlugin()
     ],
