@@ -2,8 +2,15 @@
   "manifest_version": 2,
 
   "name": "Danmaku",
-  "description": "Chrome Extension, TypeScript, Visual Studio Code",
+  "description": "An extension that helps create and visualize a danmaku (video comments) histogram.",
   "version": "1.0",
+
+  "icons": {
+    "128": "icon128.png"
+  },
+  "browser_action": {
+    "default_icon": "icon128.png"
+  },
 
   "content_scripts": [
       {
