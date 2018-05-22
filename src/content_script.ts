@@ -4,31 +4,32 @@ import echarts = require('echarts');
 import * as $ from 'jquery';
 import ResizeObserver from 'resize-observer-polyfill';
 import { combineLatest, from, Observable, Observer } from 'rxjs';
-import { concatMap, distinctUntilChanged, filter, map, take } from 'rxjs/operators';
+import { concatMap, distinctUntilChanged, filter, map, take, tap } from 'rxjs/operators';
 import { convertableToString, parseString } from 'xml2js';
 
 function observeElement (faSelector: string, selector: string): Observable<HTMLElement> {
     return Observable.create((observer: Observer<HTMLElement>) => {
-        const parent = $(faSelector);
-        const ele = parent.find(selector);
-        if (ele.length !== 0) {
-            observer.next(ele[0]);
-            return observer.complete();
-        }
-        let toDisconnect: MutationObserver | null = null;
-        const obs = toDisconnect = new MutationObserver((mutations: MutationRecord[]) => {
+        setImmediate(() => {
+            const parent = $(faSelector);
             const ele = parent.find(selector);
             if (ele.length !== 0) {
                 observer.next(ele[0]);
-                observer.complete();
-                return toDisconnect!.disconnect();
+                return observer.complete();
             }
+            let toDisconnect: MutationObserver | null = null;
+            const obs = toDisconnect = new MutationObserver((mutations: MutationRecord[]) => {
+                const ele = parent.find(selector);
+                if (ele.length !== 0) {
+                    observer.next(ele[0]);
+                    observer.complete();
+                    return toDisconnect!.disconnect();
+                }
+            });
+            obs.observe(parent[0], {
+                subtree: true,
+                childList: true
+            });
         });
-        obs.observe(parent[0], {
-            subtree: true,
-            childList: true
-        });
-
     });
 }
 
@@ -54,16 +55,6 @@ function observeContent (node: HTMLElement): Observable<string> {
     });
 }
 
-function observeAny (node: HTMLElement): Observable<null> {
-    return Observable.create((observer: Observer<null>) => {
-        observer.next(null);
-        const mutationObs = new MutationObserver((mutations: MutationRecord[]) => {
-            observer.next(null);
-        });
-        mutationObs.observe(node, { childList: true });
-    });
-}
-
 function observeSize (node: HTMLElement): Observable<null> {
     return Observable.create((observer: Observer<null>) => {
         observer.next(null);
@@ -72,20 +63,46 @@ function observeSize (node: HTMLElement): Observable<null> {
     });
 }
 
+function observeLocation (): Observable<string> {
+    const observable = Observable.create((observer: Observer<string>) => {
+        observer.next(location.href);
+        $(window).on('hashchange', () => observer.next(location.href));
+        $(window).on('popstate', () => observer.next(location.href));
+
+        const port = chrome.runtime.connect({ name: 'danmaku' });
+        port.onMessage.addListener((message: any) => {
+            console.log(message);
+            if (message.type === 'HISTORY_STATE_UPDATED') {
+                observer.next(location.href);
+            }
+        });
+    });
+    return observable.pipe(
+        // tap(str => console.log(str)),
+        distinctUntilChanged()
+    );
+}
+
 async function initialize (): Promise<void> {
-    const obContext = observeElement('body', '#bofqi') // wait for element created
+    console.log('danmaku: loaded');
+    observeLocation()
         .pipe(
-            concatMap(observeAny),
-            map(() => location.href), // detect url changes
-            distinctUntilChanged(),
-            map(url => {
-                const match = url.match(/\Wp=(\d+)/); // parse ?p=x query in url
+            concatMap(() => observeElement('body', '#bofqi')), // wait for element created
+            map(() => {
+                let match = location.href.match(/\Wp=(\d+)/); // ?p=x
+                if (match) {
+                    return Number(match[1]);
+                }
+                match = location.href.match(/\Wpage=(\d+)/); // ?page=x
                 return match ? Number(match[1]) : 1;
             }),
             distinctUntilChanged()
         )
-        .pipe(concatMap(createContext));
-    obContext.subscribe(render);
+        .pipe(
+            concatMap(createContext)
+            // tap(ctx => console.log(ctx))
+        )
+        .subscribe(render);
 }
 
 function createContext (page: number): Observable<IContext> {
@@ -94,12 +111,14 @@ function createContext (page: number): Observable<IContext> {
             concatMap(observeContent),
             map(str => str.split(':').reduce((acc, x) => acc * 60 + Number(x), 0)), // parse video length
             filter(vLength => vLength !== 0),
+            // tap(len => console.log(`length ${len}`)),
             take(1)
         );
 
     const obCid = from(getCid())
         .pipe(
             map(cids => cids[page - 1]),
+            // tap(cid => console.log(`cid ${cid}`)),
             concatMap(cid => from(getDanmaku(cid)))
         );
 
@@ -115,12 +134,21 @@ function createContext (page: number): Observable<IContext> {
 
 async function getCid (): Promise<number[]> {
     const { data: pageSource } = await axios.get(location.href);
-    const re = /"cid":(\d+)/g;
-    const res: number[] = [];
+    const res: number[] = getAllCaptured(pageSource, /"cid":(\d+)/g).map(Number);
+    if (res.length) {
+        return res;
+    } else {
+        // another format
+        return getAllCaptured(pageSource, /cid='(\d+)'/g).map(Number);
+    }
+}
+
+function getAllCaptured (source: string, re: RegExp): string[] {
+    const res: string[] = [];
     while (true) {
-        const match = re.exec(pageSource);
+        const match = re.exec(source);
         if (match) {
-            res.push(Number(match[1]));
+            res.push(match[1]);
         } else {
             break;
         }
@@ -214,7 +242,7 @@ function divideBins (data: number[], totalLength: number, bins: number): number[
         const into = Math.floor(Math.min(x / width, bins - 1));
         res[into]++;
     }
-    return res;
+    return [0, ...res, 0];
 }
 
 initialize();

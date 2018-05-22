@@ -2,8 +2,8 @@
   "manifest_version": 2,
 
   "name": "Danmaku",
-  "description": "An extension that helps create and visualize a danmaku (video comments) histogram.",
-  "version": "1.0",
+  "description": "An extension that helps create and visualize a danmaku (video comments) histogram on bilibili.com.",
+  "version": "1.1.0",
 
   "icons": {
     "128": "icon128.png"
@@ -14,14 +14,26 @@
 
   "content_scripts": [
       {
-          "matches": ["https://www.bilibili.com/video/av*"],
+          "matches": [
+            "https://www.bilibili.com/video/av*",
+            "https://www.bilibili.com/watchlater/#/av*"
+          ],
           "js": ["js/vendor.js", "js/content_script.js"],
           "css": ["bili.css"],
           "run_at": "document_idle"
       }
   ],
 
+  "background": {
+    "scripts": [
+      "js/vendor.js",
+      "js/background.js"
+    ],
+    "persistent": false
+  },
+
   "permissions": [
+    "webNavigation",
     "https://www.bilibili.com/"
   ]
 }
