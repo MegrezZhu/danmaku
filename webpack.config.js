@@ -1,13 +1,14 @@
 const webpack = require("webpack");
 const path = require('path');
+const BundleAnalyzerPlugin = require('webpack-bundle-analyzer').BundleAnalyzerPlugin;
 
 module.exports = {
     entry: {
-        popup: path.join(__dirname, 'src/popup.ts'),
-        options: path.join(__dirname, 'src/options.ts'),
+        // popup: path.join(__dirname, 'src/popup.ts'),
+        // options: path.join(__dirname, 'src/options.ts'),
         content_script: path.join(__dirname, 'src/content_script.ts'),
-        background: path.join(__dirname, 'src/background.ts'),
-        vendor: ['moment', 'jquery']
+        // background: path.join(__dirname, 'src/background.ts'),
+        vendor: ['jquery', 'echarts', 'rxjs', 'xml2js', 'bluebird', 'axios']
     },
     output: {
         path: path.join(__dirname, 'dist/js'),
@@ -35,7 +36,9 @@ module.exports = {
         new webpack.IgnorePlugin(/^\.\/locale$/, /moment$/),
 
         // minify
-        // new webpack.optimize.UglifyJsPlugin()
+        new webpack.optimize.UglifyJsPlugin(),
+
+        new BundleAnalyzerPlugin()
     ],
     devtool: 'inline-source-map'
 };

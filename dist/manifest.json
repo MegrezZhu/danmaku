@@ -9,6 +9,7 @@
       {
           "matches": ["https://www.bilibili.com/video/av*"],
           "js": ["js/vendor.js", "js/content_script.js"],
+          "css": ["bili.css"],
           "run_at": "document_idle"
       }
   ],
