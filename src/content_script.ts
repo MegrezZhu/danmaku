@@ -140,10 +140,10 @@ async function getCid (page: number): Promise<number> {
         // other videos
         const res: number[] = getAllCaptured(pageSource, /"cid":(\d+)/g).map(Number);
         if (res.length) {
-            return res[page];
+            return res[page - 1];
         } else {
             // another format
-            return Number(getAllCaptured(pageSource, /cid='(\d+)'/g)[page]);
+            return Number(getAllCaptured(pageSource, /cid='(\d+)'/g)[page - 1]);
         }
     }
 }
