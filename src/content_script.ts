@@ -95,8 +95,7 @@ async function initialize (): Promise<void> {
                 }
                 match = location.href.match(/\Wpage=(\d+)/); // ?page=x
                 return match ? Number(match[1]) : 1;
-            }),
-            distinctUntilChanged()
+            })
         )
         .pipe(
             concatMap(createContext)
@@ -115,9 +114,8 @@ function createContext (page: number): Observable<IContext> {
             take(1)
         );
 
-    const obCid = from(getCid())
+    const obCid = from(getCid(page))
         .pipe(
-            map(cids => cids[page - 1]),
             // tap(cid => console.log(`cid ${cid}`)),
             concatMap(cid => from(getDanmaku(cid)))
         );
@@ -132,14 +130,30 @@ function createContext (page: number): Observable<IContext> {
         );
 }
 
-async function getCid (): Promise<number[]> {
+async function getCid (page: number): Promise<number> {
     const { data: pageSource } = await axios.get(location.href);
-    const res: number[] = getAllCaptured(pageSource, /"cid":(\d+)/g).map(Number);
-    if (res.length) {
-        return res;
+    if (location.href.match(/bangumi\/play/)) {
+        // bangumi
+        const initialState = parseInitialState(pageSource);
+        return initialState.epInfo.cid;
     } else {
-        // another format
-        return getAllCaptured(pageSource, /cid='(\d+)'/g).map(Number);
+        // other videos
+        const res: number[] = getAllCaptured(pageSource, /"cid":(\d+)/g).map(Number);
+        if (res.length) {
+            return res[page];
+        } else {
+            // another format
+            return Number(getAllCaptured(pageSource, /cid='(\d+)'/g)[page]);
+        }
+    }
+}
+
+function parseInitialState (page: string): {[k: string]: any} {
+    const match = page.match(/window\.__INITIAL_STATE__=(.+);\(function\(\)/);
+    if (match) {
+        return JSON.parse(match[1]);
+    } else {
+        throw new Error('failed to parse INITIAL_STATE');
     }
 }
 
