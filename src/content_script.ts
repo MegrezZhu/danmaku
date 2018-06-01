@@ -2,58 +2,11 @@ import axios from 'axios';
 import { promisify } from 'bluebird';
 import echarts = require('echarts');
 import * as $ from 'jquery';
+import * as qs from 'qs';
 import ResizeObserver from 'resize-observer-polyfill';
-import { combineLatest, from, Observable, Observer } from 'rxjs';
-import { concatMap, distinctUntilChanged, filter, map, take } from 'rxjs/operators';
+import { from, Observable, Observer } from 'rxjs';
+import { concatMap, distinctUntilChanged, filter, tap } from 'rxjs/operators';
 import { convertableToString, parseString } from 'xml2js';
-
-function observeElement (faSelector: string, selector: string): Observable<HTMLElement> {
-    return Observable.create((observer: Observer<HTMLElement>) => {
-        setImmediate(() => {
-            const parent = $(faSelector);
-            const ele = parent.find(selector);
-            if (ele.length !== 0) {
-                observer.next(ele[0]);
-                return observer.complete();
-            }
-            let toDisconnect: MutationObserver | null = null;
-            const obs = toDisconnect = new MutationObserver((mutations: MutationRecord[]) => {
-                const ele = parent.find(selector);
-                if (ele.length !== 0) {
-                    observer.next(ele[0]);
-                    observer.complete();
-                    return toDisconnect!.disconnect();
-                }
-            });
-            obs.observe(parent[0], {
-                subtree: true,
-                childList: true
-            });
-        });
-    });
-}
-
-function observeContent (node: HTMLElement): Observable<string> {
-    return Observable.create((observer: Observer<string>) => {
-        observer.next($(node).text());
-        const mutationObs = new MutationObserver((mutations: MutationRecord[]) => {
-            for (const rec of mutations) {
-                if (rec.type === 'childList') {
-                    observer.next($(node).text());
-                }
-            }
-        });
-        mutationObs.observe(
-            node,
-            {
-                characterData: false,
-                attributes: false,
-                childList: true,
-                subtree: false
-            }
-        );
-    });
-}
 
 function observeSize (node: HTMLElement): Observable<null> {
     return Observable.create((observer: Observer<null>) => {
@@ -87,87 +40,75 @@ async function initialize (): Promise<void> {
     console.log('danmaku: loaded');
     observeLocation()
         .pipe(
-            concatMap(() => observeElement('body', '#bofqi')), // wait for element created
-            map(() => {
-                let match = location.href.match(/\Wp=(\d+)/); // ?p=x
-                if (match) {
-                    return Number(match[1]);
-                }
-                match = location.href.match(/\Wpage=(\d+)/); // ?page=x
-                return match ? Number(match[1]) : 1;
-            })
-        )
-        .pipe(
-            concatMap(createContext)
-            // tap(ctx => console.log(ctx))
+            concatMap(createContext),
+            tap(ctx => console.log(ctx))
         )
         .subscribe(render);
 }
 
-function createContext (page: number): Observable<IContext> {
-    const obLength = observeElement('body', '.bilibili-player-video-time-total')
+function createContext (): Observable<IContext> {
+    return from(getVideoInfo())
         .pipe(
-            concatMap(observeContent),
-            map(str => str.split(':').reduce((acc, x) => acc * 60 + Number(x), 0)), // parse video length
-            filter(vLength => vLength !== 0),
-            // tap(len => console.log(`length ${len}`)),
-            take(1)
-        );
-
-    const obCid = from(getCid(page))
-        .pipe(
-            // tap(cid => console.log(`cid ${cid}`)),
-            concatMap(cid => from(getDanmaku(cid)))
-        );
-
-    return combineLatest(obLength, obCid)
-        .pipe(
-            map(([vLen, danmaku]) => ({
-                danmaku,
-                length: vLen
-            })),
-            take(1)
+            filter(ctx => !isNaN(ctx.cid)),
+            concatMap(async ctx => {
+                return {
+                    ...ctx,
+                    danmaku: await getDanmaku(ctx.cid)
+                };
+            })
         );
 }
 
-async function getCid (page: number): Promise<number> {
-    const { data: pageSource } = await axios.get(location.href);
-    if (location.href.match(/bangumi\/play/)) {
-        // bangumi
-        const initialState = parseInitialState(pageSource);
-        return initialState.epInfo.cid;
-    } else {
-        // other videos
-        const res: number[] = getAllCaptured(pageSource, /"cid":(\d+)/g).map(Number);
-        if (res.length) {
-            return res[page - 1];
-        } else {
-            // another format
-            return Number(getAllCaptured(pageSource, /cid='(\d+)'/g)[page - 1]);
-        }
-    }
+async function getVideoInfo (): Promise<{ av: number; cid: number; length: number; page: number }> {
+    const loc = getLocation(location.href);
+    const { data: pageList } = await axios.get(`https://api.bilibili.com/x/player/pagelist?aid=${loc.av}&jsonp=jsonp`);
+    const { cid, duration: length } = pageList.data[loc.page - 1];
+    return {
+        cid, length,
+        av: loc.av,
+        page: loc.page
+    };
 }
 
-function parseInitialState (page: string): {[k: string]: any} {
-    const match = page.match(/window\.__INITIAL_STATE__=(.+);\(function\(\)/);
+function getLocation (url: string): { av: number; page: number } {
+    let match = url.match(/\/video\/av(\d+)/);
     if (match) {
-        return JSON.parse(match[1]);
-    } else {
-        throw new Error('failed to parse INITIAL_STATE');
-    }
-}
-
-function getAllCaptured (source: string, re: RegExp): string[] {
-    const res: string[] = [];
-    while (true) {
-        const match = re.exec(source);
-        if (match) {
-            res.push(match[1]);
+        // /video/avXXXXX
+        const av = Number(match[1]);
+        const {p} = parseQuery(url); // ?p=XX
+        if (!isNaN(p)) {
+            return { av, page: Number(p) };
+        }
+        const match1 = url.match(/\/index_(\d+)\.html(?:#page=(\d+))?/); // /index_XX.html
+        if (match1) {
+            return { av, page: Number(match1[2] || match1[1]) };
         } else {
-            break;
+            return { av, page: 1 };
         }
     }
-    return res;
+    match = url.match(/watchlater\/#\/av(\d+)(?:\/p(\d+))?/);
+    if (match) {
+        return {
+            av: Number(match[1]),
+            page: isNaN(Number(match[2])) ? 1 : Number(match[2])
+        };
+    }
+    match = url.match(/\/bangumi\/play/);
+    if (match) {
+        const av = $('a.info-sec-av').text().slice(2);
+        return { av: Number(av), page: 1 };
+    }
+
+    console.warn(`unparsable url ${url}`);
+    return { av: NaN, page: NaN };
+}
+
+function parseQuery (url: string): {[k: string]: any} {
+    const match = url.match(/\?(.+)$/);
+    if (!match) {
+        return {};
+    }
+    return qs.parse(match[1]) || {};
 }
 
 function render (context: IContext) {
@@ -212,6 +153,9 @@ function render (context: IContext) {
 interface IContext {
     danmaku: IDanmaku[];
     length: number;
+    av: number;
+    page: number;
+    cid: number;
 }
 
 interface IDanmaku {
