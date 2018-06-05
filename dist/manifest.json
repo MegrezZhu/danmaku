@@ -3,7 +3,7 @@
 
   "name": "Danmaku",
   "description": "An extension that helps create and visualize a danmaku (video comments) histogram on bilibili.com.",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "homepage_url": "https://github.com/MegrezZhu/danmaku",
 
   "icons": {
@@ -36,7 +36,6 @@
 
   "permissions": [
     "webNavigation",
-    "https://www.bilibili.com/",
-    "https://api.bilibili.com/"
+    "https://*.bilibili.com/"
   ]
 }
