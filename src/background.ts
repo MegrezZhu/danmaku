@@ -1,8 +1,5 @@
-// chrome.runtime.onInstalled.addListener(init);
-
 const ports: Map<number, chrome.runtime.Port> = new Map();
 
-// function init () {
 console.log('init');
 chrome.runtime.onConnect.addListener(port => {
     if (port.name === 'danmaku') {

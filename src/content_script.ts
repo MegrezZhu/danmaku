@@ -8,6 +8,32 @@ import { from, Observable, Observer } from 'rxjs';
 import { concatMap, distinctUntilChanged, filter, tap } from 'rxjs/operators';
 import { convertableToString, parseString } from 'xml2js';
 
+function observeElement (faSelector: string, selector: string, ctx: IContext): Observable<IContext> {
+    return Observable.create((observer: Observer<IContext>) => {
+        setImmediate(() => {
+            const parent = $(faSelector);
+            const ele = parent.find(selector);
+            if (ele.length !== 0) {
+                observer.next(ctx);
+                return observer.complete();
+            }
+            let toDisconnect: MutationObserver | null = null;
+            const obs = toDisconnect = new MutationObserver((mutations: MutationRecord[]) => {
+                const ele = parent.find(selector);
+                if (ele.length !== 0) {
+                    observer.next(ctx);
+                    observer.complete();
+                    return toDisconnect!.disconnect();
+                }
+            });
+            obs.observe(parent[0], {
+                subtree: true,
+                childList: true
+            });
+        });
+    });
+}
+
 function observeSize (node: HTMLElement): Observable<null> {
     return Observable.create((observer: Observer<null>) => {
         observer.next(null);
@@ -24,7 +50,7 @@ function observeLocation (): Observable<string> {
 
         const port = chrome.runtime.connect({ name: 'danmaku' });
         port.onMessage.addListener((message: any) => {
-            console.log(message);
+            // console.log(message);
             if (message.type === 'HISTORY_STATE_UPDATED') {
                 observer.next(location.href);
             }
@@ -41,7 +67,8 @@ async function initialize (): Promise<void> {
     observeLocation()
         .pipe(
             concatMap(createContext),
-            tap(ctx => console.log(ctx))
+            tap(ctx => console.log(`danmaku: context created, ${ctx.danmaku.length} danmaku loaded`)),
+            concatMap(ctx => observeElement('body', '.bpui-slider-tracker-wrp', ctx))
         )
         .subscribe(render);
 }
@@ -99,7 +126,7 @@ function getLocation (url: string): { av: number; page: number } {
         return { av: Number(av), page: 1 };
     }
 
-    console.warn(`unparsable url ${url}`);
+    console.warn(`danmaku: unparsable url ${url}`);
     return { av: NaN, page: NaN };
 }
 
@@ -113,8 +140,8 @@ function parseQuery (url: string): {[k: string]: any} {
 
 function render (context: IContext) {
     $('#megrez-danmaku').remove();
-    $('<div id="megrez-danmaku"></div>').prependTo('.bpui-slider-tracker-wrp');
-
+    $('<div id="megrez-danmaku" />').prependTo('.bpui-slider-tracker-wrp');
+    // console.log($('.bpui-slider-tracker-wrp'));
     const chart = echarts.init($('#megrez-danmaku').get(0) as HTMLCanvasElement);
     const hist = divideBins(context.danmaku.map(d => d.offset), context.length, 50);
     chart.setOption({
