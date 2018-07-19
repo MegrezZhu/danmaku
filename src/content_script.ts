@@ -2,11 +2,14 @@ import axios from 'axios';
 import { promisify } from 'bluebird';
 import echarts = require('echarts');
 import * as $ from 'jquery';
+import { debounce } from 'lodash';
 import * as qs from 'qs';
 import ResizeObserver from 'resize-observer-polyfill';
-import { from, Observable, Observer } from 'rxjs';
+import { from, Observable, Observer, race } from 'rxjs';
 import { concatMap, distinctUntilChanged, filter, tap } from 'rxjs/operators';
 import { convertableToString, parseString } from 'xml2js';
+
+const DEBOUNCE_DELAY = 100;
 
 function observeElement (faSelector: string, selector: string, ctx: IContext): Observable<IContext> {
     return Observable.create((observer: Observer<IContext>) => {
@@ -18,20 +21,26 @@ function observeElement (faSelector: string, selector: string, ctx: IContext): O
                 return observer.complete();
             }
             let toDisconnect: MutationObserver | null = null;
-            const obs = toDisconnect = new MutationObserver((mutations: MutationRecord[]) => {
+            const obs = toDisconnect = new MutationObserver(debounce(() => {
                 const ele = parent.find(selector);
                 if (ele.length !== 0) {
                     observer.next(ctx);
                     observer.complete();
                     return toDisconnect!.disconnect();
                 }
-            });
+            }, DEBOUNCE_DELAY));
             obs.observe(parent[0], {
                 subtree: true,
                 childList: true
             });
         });
     });
+}
+
+function observeElements (faSelector: string, selectors: string[], ctx: IContext): Observable<IContext> {
+    return race(
+        selectors.map(selector => observeElement(faSelector, selector, ctx))
+    );
 }
 
 function observeSize (node: HTMLElement): Observable<null> {
@@ -68,7 +77,11 @@ async function initialize (): Promise<void> {
         .pipe(
             concatMap(createContext),
             tap(ctx => console.log(`danmaku: context created, ${ctx.danmaku.length} danmaku loaded`)),
-            concatMap(ctx => observeElement('body', '.bpui-slider-tracker-wrp', ctx))
+            concatMap(ctx => observeElements(
+                'body',
+                ['.bilibili-player-video-progress-slider', '.bpui-slider-tracker-wrp'],
+                ctx)
+            )
         )
         .subscribe(render);
 }
@@ -102,7 +115,7 @@ function getLocation (url: string): { av: number; page: number } {
     if (match) {
         // /video/avXXXXX
         const av = Number(match[1]);
-        const {p} = parseQuery(url); // ?p=XX
+        const { p } = parseQuery(url); // ?p=XX
         if (!isNaN(p)) {
             return { av, page: Number(p) };
         }
@@ -130,7 +143,7 @@ function getLocation (url: string): { av: number; page: number } {
     return { av: NaN, page: NaN };
 }
 
-function parseQuery (url: string): {[k: string]: any} {
+function parseQuery (url: string): { [k: string]: any } {
     const match = url.match(/\?(.+)$/);
     if (!match) {
         return {};
@@ -140,8 +153,17 @@ function parseQuery (url: string): {[k: string]: any} {
 
 function render (context: IContext) {
     $('#megrez-danmaku').remove();
-    $('<div id="megrez-danmaku" />').prependTo('.bpui-slider-tracker-wrp');
-    // console.log($('.bpui-slider-tracker-wrp'));
+    let slider = $('.bpui-slider-tracker-wrp');
+    if (slider.length === 0) {
+        // new version
+        slider = $('.bilibili-player-video-progress-slider');
+    }
+    $('<div id="megrez-danmaku" />').prependTo(slider);
+    if (slider.length === 0) {
+        console.error('danmaku: slider not found, failed to attach damaku canvas!');
+        return;
+    }
+
     const chart = echarts.init($('#megrez-danmaku').get(0) as HTMLCanvasElement);
     const hist = divideBins(context.danmaku.map(d => d.offset), context.length, 50);
     chart.setOption({
@@ -170,10 +192,10 @@ function render (context: IContext) {
         }
     });
 
-    observeSize($('.bpui-slider-tracker-wrp').get(0))
-        .subscribe(() => {
+    observeSize(slider.get(0))
+        .subscribe(debounce(() => {
             chart.resize();
-        });
+        }, DEBOUNCE_DELAY));
     console.log('danmaku: render finished.');
 }
 
@@ -230,4 +252,5 @@ function divideBins (data: number[], totalLength: number, bins: number): number[
     return [0, ...res, 0];
 }
 
-initialize();
+initialize()
+    .catch(console.error);
