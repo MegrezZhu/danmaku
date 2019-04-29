@@ -1,0 +1,10 @@
+{
+    "appName": {
+        "message": "Danmaku",
+        "description": "The title of the application, displayed in the web store."
+    },
+    "appDesc": {
+        "message": "给Bilibili进度条处增加弹幕热度条，可以方便跳到高能点",
+        "description": "The description of the application, displayed in the web store."
+    }
+}

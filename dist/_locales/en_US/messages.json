@@ -1,0 +1,10 @@
+{
+    "appName": {
+        "message": "Danmaku",
+        "description": "The title of the application, displayed in the web store."
+    },
+    "appDesc": {
+        "message": "An extension that helps create and visualize a danmaku (video comments) histogram on bilibili.com.",
+        "description": "The description of the application, displayed in the web store."
+    }
+}

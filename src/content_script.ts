@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { promisify } from 'bluebird';
 import echarts = require('echarts');
 import * as $ from 'jquery';
@@ -8,6 +7,7 @@ import ResizeObserver from 'resize-observer-polyfill';
 import { from, Observable, Observer, race } from 'rxjs';
 import { concatMap, distinctUntilChanged, filter, tap } from 'rxjs/operators';
 import { convertableToString, parseString } from 'xml2js';
+import { IMessage } from './message';
 
 const DEBOUNCE_DELAY = 100;
 
@@ -99,9 +99,20 @@ function createContext (): Observable<IContext> {
         );
 }
 
+async function sendMessageToBackgrount (message: IMessage): Promise<any> {
+    return new Promise((resolve) => {
+        chrome.runtime.sendMessage(message, (response) => {
+            resolve(response);
+        });
+    });
+}
+
 async function getVideoInfo (): Promise<{ av: number; cid: number; length: number; page: number }> {
     const loc = getLocation(location.href);
-    const { data: pageList } = await axios.get(`https://api.bilibili.com/x/player/pagelist?aid=${loc.av}&jsonp=jsonp`);
+    const pageList = await sendMessageToBackgrount({
+        type: 'getPageList',
+        data: { av: loc.av }
+    });
     const { cid, duration: length } = pageList.data[loc.page - 1];
     return {
         cid, length,
@@ -223,7 +234,10 @@ interface IRawDanmaku {
 const parseXML = promisify(parseString as ((xml: convertableToString, cb: (err: any, result?: any) => void) => void));
 
 async function getDanmaku (cid: number): Promise<IDanmaku[]> {
-    const { data } = await axios.get(`https://comment.bilibili.com/${cid}.xml`);
+    const data = await sendMessageToBackgrount({
+        type: 'getDanmaku',
+        data: { cid }
+    });
     const { i: { d } }: { i: { d: IRawDanmaku[] } } = await parseXML(data);
     return d.map(parseRawDanmaku);
 }
