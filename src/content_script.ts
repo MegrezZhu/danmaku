@@ -174,6 +174,12 @@ function render (context: IContext) {
         console.error('danmaku: slider not found, failed to attach damaku canvas!');
         return;
     }
+    if (context.danmaku.length === 0) {
+        console.warn('danmaku: 0 danmaku loaded, display disabled.');
+        return;
+    }
+
+    $('#bilibiliPlayer').addClass('megrez-danmaku-activated');
 
     const chart = echarts.init($('#megrez-danmaku').get(0) as HTMLCanvasElement);
     const hist = divideBins(context.danmaku.map(d => d.offset), context.length, 50);
@@ -239,7 +245,7 @@ async function getDanmaku (cid: number): Promise<IDanmaku[]> {
         data: { cid }
     });
     const { i: { d } }: { i: { d: IRawDanmaku[] } } = await parseXML(data);
-    return d.map(parseRawDanmaku);
+    return d ? d.map(parseRawDanmaku) : [];
 }
 
 function parseRawDanmaku (raw: IRawDanmaku): IDanmaku {

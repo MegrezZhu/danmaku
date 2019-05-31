@@ -10,26 +10,26 @@
 
 /* old version */
 
-.bpui-slider-tracker-wrp:hover #megrez-danmaku {
+#bilibiliPlayer.megrez-danmaku-activated .bpui-slider-tracker-wrp:hover #megrez-danmaku {
   visibility: visible;
   opacity: 1;
 }
 
-.bilibili-player-video-progress .bilibili-player-video-progress-detail-img {
+#bilibiliPlayer.megrez-danmaku-activated .bilibili-player-video-progress .bilibili-player-video-progress-detail-img {
   transform: translateY(-30px);
 }
 
 /* new version */
 
-.bilibili-player-video-progress-slider #megrez-danmaku {
+#bilibiliPlayer.megrez-danmaku-activated .bilibili-player-video-progress-slider #megrez-danmaku {
   transform: translateY(5px);
 }
 
-.bilibili-player-video-progress-slider:hover #megrez-danmaku {
+#bilibiliPlayer.megrez-danmaku-activated .bilibili-player-video-progress-slider:hover #megrez-danmaku {
   visibility: visible;
   opacity: 1;
 }
 
-.bilibili-player-video-control-wrap .bilibili-player-video-progress-detail-img {
+#bilibiliPlayer.megrez-danmaku-activated .bilibili-player-video-control-wrap .bilibili-player-video-progress-detail-img {
   transform: translateY(-25px);
 }
