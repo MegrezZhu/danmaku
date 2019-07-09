@@ -99,7 +99,7 @@ function createContext (): Observable<IContext> {
         );
 }
 
-async function sendMessageToBackgrount (message: IMessage): Promise<any> {
+async function sendMessageToBackground (message: IMessage): Promise<any> {
     return new Promise((resolve) => {
         chrome.runtime.sendMessage(message, (response) => {
             resolve(response);
@@ -109,7 +109,7 @@ async function sendMessageToBackgrount (message: IMessage): Promise<any> {
 
 async function getVideoInfo (): Promise<{ av: number; cid: number; length: number; page: number }> {
     const loc = getLocation(location.href);
-    const pageList = await sendMessageToBackgrount({
+    const pageList = await sendMessageToBackground({
         type: 'getPageList',
         data: { av: loc.av }
     });
@@ -146,7 +146,7 @@ function getLocation (url: string): { av: number; page: number } {
     }
     match = url.match(/\/bangumi\/play/);
     if (match) {
-        const av = $('a.info-sec-av').text().slice(2);
+        const av = $('.av-link').text().slice(2);
         return { av: Number(av), page: 1 };
     }
 
@@ -182,7 +182,7 @@ function render (context: IContext) {
     $('#bilibiliPlayer').addClass('megrez-danmaku-activated');
 
     const chart = echarts.init($('#megrez-danmaku').get(0) as HTMLCanvasElement);
-    const hist = divideBins(context.danmaku.map(d => d.offset), context.length, 50);
+    const hist = divideBins(context.danmaku.map(d => d.offset), context.length, 75);
     chart.setOption({
         xAxis: { show: false, data: hist.keys() },
         yAxis: { show: false },
@@ -240,7 +240,7 @@ interface IRawDanmaku {
 const parseXML = promisify(parseString as ((xml: convertableToString, cb: (err: any, result?: any) => void) => void));
 
 async function getDanmaku (cid: number): Promise<IDanmaku[]> {
-    const data = await sendMessageToBackgrount({
+    const data = await sendMessageToBackground({
         type: 'getDanmaku',
         data: { cid }
     });
